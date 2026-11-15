@@ -1,0 +1,1525 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Dough Calculator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: style picker on top, then batch controls beside a dark "scale readout" panel, then method/bake/tips for the chosen style. */
+  :root{
+    --bg:#EEF1EE; --surface:#FBFCFA; --field:#FFFFFF; --ink:#1B2428; --muted:#566468; --line:#D2DAD5;
+    --accent:#1F5D8C; --accent-ink:#FFFFFF; --accent-soft:#E1ECF4;
+    --panel:#14324B; --panel-ink:#EAF2F7; --panel-muted:#93B3CB; --panel-line:rgba(255,255,255,.16); --panel-hi:#F2C46B; --panel-chip:rgba(255,255,255,.08);
+    --warn:#8A4B00;
+    --f-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+    --f-body:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --f-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#101518; --surface:#182024; --field:#10171A; --ink:#E3EAE8; --muted:#92A2A6; --line:#2A3639;
+      --accent:#72B5E3; --accent-ink:#0B1A24; --accent-soft:#1C3345;
+      --panel:#0C2033; --panel-muted:#8EAFC8; --panel-line:rgba(255,255,255,.14);
+      --warn:#E3AA4F;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#101518; --surface:#182024; --field:#10171A; --ink:#E3EAE8; --muted:#92A2A6; --line:#2A3639;
+    --accent:#72B5E3; --accent-ink:#0B1A24; --accent-soft:#1C3345;
+    --panel:#0C2033; --panel-muted:#8EAFC8; --panel-line:rgba(255,255,255,.14);
+    --warn:#E3AA4F;
+    color-scheme:dark;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:400 16px/1.5 var(--f-body);
+    padding-block:28px 56px;
+    padding-left:max(16px, env(safe-area-inset-left,0px));
+    padding-right:max(16px, env(safe-area-inset-right,0px));
+  }
+  button,input,select{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  .viewport{max-width:1080px;margin:0 auto;overflow-x:auto}
+  .app{display:grid;gap:28px;min-width:0}
+  .app>*{min-width:0}
+  .app[data-view="desktop"]{min-width:900px}
+  .app[data-view="mobile"]{max-width:460px;margin:0 auto}
+  .head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  .seg{display:inline-grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+  .seg button{border:0;background:transparent;border-radius:7px;padding:8px 14px;font:600 14px var(--f-display);cursor:pointer;min-height:40px}
+  .seg button:hover{background:var(--accent-soft)}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+  .eyebrow{margin:0;font:600 12px/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  h1,h2{font-family:var(--f-display);text-wrap:balance;margin:0}
+  h1{font-size:clamp(2.1rem,5.5vw,3.2rem);font-weight:700;letter-spacing:-.025em;line-height:1.05;margin-top:8px}
+  .lede{margin:10px 0 0;color:var(--muted);max-width:56ch}
+
+  /* Recipe type + style pickers */
+  .pick{display:grid;gap:14px}
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--surface);max-width:440px}
+  .tabs button{border:0;background:transparent;border-radius:7px;padding:10px 12px;font:600 15px var(--f-display);cursor:pointer;min-height:44px}
+  .tabs button:hover{background:var(--accent-soft)}
+  .tabs button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+  .styles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+  .chip{display:block;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 12px;cursor:pointer;min-width:0}
+  .chip:hover{border-color:var(--accent)}
+  .chip[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
+  .chip .n{display:block;font-weight:600;font-size:15px}
+  .chip .m{display:block;font:400 12px var(--f-mono);color:var(--muted);margin-top:2px}
+
+  .grid{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:24px;align-items:start}
+  [data-view="mobile"] .grid{grid-template-columns:minmax(0,1fr)}
+  [data-view="mobile"] .tabs{max-width:none}
+  [data-view="mobile"] .controls,[data-view="mobile"] .readout{padding:16px}
+
+  /* Controls */
+  .controls{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;min-width:0}
+  .grp{padding-top:18px;margin-top:18px;border-top:1px solid var(--line);display:grid;gap:12px}
+  .grp:first-child{border-top:0;margin-top:0;padding-top:0}
+  .glabel{margin:0;display:flex;justify-content:space-between;align-items:center;gap:8px;font:600 12px/1.2 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .field{display:grid;gap:6px;min-width:0}
+  .field label,.lblrow label{font-size:13px;font-weight:600;color:var(--muted)}
+  .lblrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .lblrow output{font:500 14px var(--f-mono);color:var(--ink);text-align:right}
+  .num{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--field);min-width:0}
+  .num:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+  .num input{width:100%;min-width:0;height:44px;border:0;background:transparent;padding:0 12px;font:500 16px var(--f-mono);font-variant-numeric:tabular-nums;outline:none}
+  .num .suf{padding-right:12px;color:var(--muted);font:400 14px var(--f-mono)}
+  select{width:100%;height:46px;border:1px solid var(--line);border-radius:8px;background:var(--field);padding:0 12px;font-size:16px}
+  input[type=range]{width:100%;accent-color:var(--accent);height:28px;margin:0}
+  .hint{margin:0;font-size:13px;color:var(--muted)}
+  .tag{font:500 11px var(--f-mono);letter-spacing:.04em;text-transform:none;background:var(--accent-soft);color:var(--accent);padding:3px 8px;border-radius:99px}
+  .linkbtn{justify-self:start;border:0;background:none;padding:6px 0;color:var(--accent);font-weight:600;font-size:14px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+  .linkbtn:disabled{color:var(--muted);text-decoration:none;cursor:default}
+
+  /* Scale readout */
+  .readout{background:var(--panel);color:var(--panel-ink);border-radius:14px;padding:22px;min-width:0}
+  [data-view="desktop"] .readout{position:sticky;top:16px}
+  .readout :focus-visible{outline-color:var(--panel-hi)}
+  .r-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 20px;flex-wrap:wrap}
+  .r-head .eyebrow{color:var(--panel-muted)}
+  .r-head h2{font-size:1.6rem;font-weight:700;letter-spacing:-.015em;margin-top:4px}
+  .r-sub{margin:2px 0 0;font-size:14px;color:var(--panel-muted)}
+  .total{text-align:right}
+  .total .lbl{display:block;font:600 11px/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--panel-muted)}
+  .total .val{display:block;font:500 clamp(1.9rem,5vw,2.5rem)/1.1 var(--f-mono);font-variant-numeric:tabular-nums;margin-top:4px}
+  .total small{font-size:.9rem;color:var(--panel-muted);margin-left:4px}
+  table{width:100%;border-collapse:collapse;margin-top:18px;color:inherit;font-size:inherit}
+  th,td{padding:12px 0;border-top:1px solid var(--panel-line);vertical-align:baseline;text-align:left}
+  thead th{padding:0 0 10px;border-top:0;font:600 11px/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--panel-muted)}
+  thead th:nth-child(n+2){text-align:right}
+  tbody th{font-weight:500}
+  .ing{display:block;font-weight:600}
+  .sub{display:block;font-size:12.5px;color:var(--panel-muted);margin-top:2px}
+  td.pct{text-align:right;font:400 14px var(--f-mono);color:var(--panel-muted);padding-left:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  td.g{text-align:right;font:500 1.35rem var(--f-mono);padding-left:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  td.g .u{font-size:.8rem;color:var(--panel-muted);margin-left:3px}
+  tr.is-leaven td.g{color:var(--panel-hi)}
+  .sum{display:flex;flex-wrap:wrap;gap:6px 22px;margin:4px 0 0;padding-top:14px;border-top:1px solid var(--panel-line);font:400 13px var(--f-mono);color:var(--panel-muted)}
+  .sum b{font-weight:500;color:var(--panel-ink)}
+  .warn{margin:14px 0 0;color:var(--panel-hi);font-size:14px}
+  .equiv{margin-top:18px;padding-top:16px;border-top:1px solid var(--panel-line)}
+  .equiv .lbl{margin:0 0 10px;font:600 11px/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--panel-muted)}
+  .eq-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .eq-row button{border:1px solid var(--panel-line);background:var(--panel-chip);color:var(--panel-ink);border-radius:8px;padding:9px 10px;text-align:left;cursor:pointer;min-width:0}
+  .eq-row button:hover{border-color:var(--panel-muted)}
+  .eq-row button[aria-pressed="true"]{border-color:var(--panel-hi);box-shadow:inset 0 0 0 1px var(--panel-hi)}
+  .eq-row span{display:block;font-size:12.5px;color:var(--panel-muted)}
+  .eq-row b{display:block;font:500 15px var(--f-mono);margin-top:2px}
+  .foot{margin:14px 0 0;font-size:12.5px;color:var(--panel-muted)}
+
+  /* Suggestions */
+  .notes{border-top:1px solid var(--line);padding-top:24px;display:grid;gap:18px}
+  .notes h2{font-size:clamp(1.5rem,3.5vw,2rem);font-weight:700;letter-spacing:-.02em;margin-top:4px}
+  .blurb{margin:6px 0 0;max-width:62ch;color:var(--muted)}
+  .cols{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:28px}
+  .cols>div{min-width:0}
+  [data-view="mobile"] .cols{grid-template-columns:minmax(0,1fr);gap:22px}
+  .cols h3{margin:0 0 10px;font:600 12px/1.2 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .cols h3:not(:first-child){margin-top:18px}
+  .cols ol,.cols ul{margin:0;padding-left:20px;display:grid;gap:8px}
+  .cols p{margin:0}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+
+  [hidden]{display:none!important}
+  .tabs.two{grid-template-columns:repeat(2,1fr);max-width:360px}
+  .strip{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:12px 16px;border:1px solid var(--line);border-radius:10px;background:var(--accent-soft)}
+  .strip p{margin:0;min-width:0;font-size:15px}
+  .acc-h{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:48px;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer}
+  .acc-h b{display:block;font:700 1.15rem var(--f-display);letter-spacing:-.01em}
+  .acc-h small{display:block;margin-top:2px;font-size:14px;color:var(--muted)}
+  .chev{flex:none;width:10px;height:10px;margin:0 6px 4px 0;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .15s}
+  .acc-h[aria-expanded="true"] .chev{transform:rotate(-135deg);margin-bottom:-4px}
+  .acc-b{padding-top:12px;border-top:1px solid var(--line);margin-top:10px}
+  .head-tools{display:flex;gap:8px;flex-wrap:wrap}
+  .sdsec{display:grid;gap:18px;border-top:1px solid var(--line);padding-top:24px}
+  .sdsec h2{font-size:clamp(1.5rem,3.5vw,2rem);font-weight:700;letter-spacing:-.02em;margin-top:4px}
+  .tools{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}
+  [data-view="mobile"] .tools{grid-template-columns:minmax(0,1fr)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;min-width:0}
+  [data-view="mobile"] .card{padding:16px}
+  .card.wide{grid-column:1/-1}
+  .card h3{margin:0;font:700 1.2rem var(--f-display);letter-spacing:-.01em}
+  .card .sub2{margin:4px 0 0;color:var(--muted);font-size:14px}
+  .fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px}
+  select{text-overflow:ellipsis}
+  .fgrid .field{min-width:0}
+  .tl{list-style:none;margin:16px 0 0;padding:0}
+  .tl li{display:grid;grid-template-columns:84px minmax(0,1fr);gap:4px 14px;padding:11px 0;border-top:1px solid var(--line)}
+  [data-view="mobile"] .tl li{grid-template-columns:62px minmax(0,1fr);gap:4px 10px}
+  .tl .when{display:block;font:500 15px var(--f-mono);color:var(--accent);font-variant-numeric:tabular-nums}
+  .tl .when small{display:block;font:400 11px var(--f-body);color:var(--muted);letter-spacing:.04em}
+  .tl .what b{display:block;font-weight:600}
+  .tl .what span{display:block;color:var(--muted);font-size:14px}
+  .tl li.key .what b{color:var(--accent)}
+  .kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 16px;margin:14px 0 0;padding:0}
+  .kv dt{padding:9px 0;border-top:1px solid var(--line);font-weight:500}
+  .kv dd{margin:0;padding:9px 0;border-top:1px solid var(--line);font:500 15px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+  .kv .big{font-size:1.4rem;color:var(--accent)}
+  .note2{margin:12px 0 0;font-size:14px;color:var(--muted)}
+  .note2.bad{color:var(--warn)}
+  details{border-top:1px solid var(--line);padding:2px 0}
+  details:first-of-type{margin-top:12px}
+  summary{cursor:pointer;font-weight:600;padding:12px 0;list-style-position:outside}
+  details>div{padding:0 0 14px;color:var(--muted);font-size:15px;display:grid;gap:6px}
+  details>div b{color:var(--ink);font-weight:600}
+  .btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:0 16px;min-height:44px;font-weight:600;cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--accent)}
+  .btn.sm{min-height:36px;padding:0 12px;font-size:14px}
+  .btn:hover{filter:brightness(1.06)}
+  .savebar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+  .saved{list-style:none;margin:0;padding:0;display:grid}
+  .saved li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+  .saved b{display:block;font-weight:600;overflow-wrap:anywhere}
+  .saved span{display:block;font-size:13px;color:var(--muted)}
+  input[type=text]{width:100%;min-width:0;height:44px;border:0;background:transparent;padding:0 12px;font:500 16px var(--f-body);outline:none}
+</style>
+
+<div class="viewport"><main class="app" id="app" data-view="desktop">
+  <header>
+    <div class="head-row">
+      <div>
+        <p class="eyebrow">Baker's percentages</p>
+        <h1>Dough Calculator</h1>
+      </div>
+      <div class="head-tools">
+        <div class="seg" id="unitSwitch" role="group" aria-label="Units">
+          <button type="button" data-unit="metric" aria-pressed="true">Metric</button>
+          <button type="button" data-unit="imperial" aria-pressed="false">Imperial</button>
+        </div>
+        <div class="seg" id="viewSwitch" role="group" aria-label="Layout">
+          <button type="button" data-view="mobile" aria-pressed="false">Mobile</button>
+          <button type="button" data-view="desktop" aria-pressed="true">Desktop</button>
+        </div>
+      </div>
+    </div>
+    <p class="lede">Choose a style and what makes it rise. Get weights for your batch, plus method, bake and tips.</p>
+  </header>
+
+  <nav class="tabs two" id="pageTabs" aria-label="Menu">
+    <button type="button" data-page="recipe" aria-pressed="true">Recipes</button>
+    <button type="button" data-page="tools" aria-pressed="false">Sourdough tools</button>
+  </nav>
+
+  <section class="pick" aria-label="Recipe">
+    <div class="tabs" id="tabs" role="group" aria-label="Recipe type"></div>
+    <div class="styles" id="styles" role="group" aria-label="Style"></div>
+  </section>
+
+  <div class="grid" id="mainGrid">
+    <form class="controls" id="controls" autocomplete="off">
+      <div class="grp">
+        <h2 class="glabel">Batch</h2>
+        <div class="row2">
+          <div class="field">
+            <label for="pieces">Pieces</label>
+            <div class="num"><input id="pieces" type="number" inputmode="numeric" min="1" max="60" step="1"></div>
+          </div>
+          <div class="field" id="weightField">
+            <label for="weight">Weight each</label>
+            <div class="num"><input id="weight" type="number" inputmode="decimal" data-kind="w" data-lo="50" data-hi="5000"><span class="suf usuf-w">g</span></div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="scaleBy">Scale by</label>
+          <select id="scaleBy">
+            <option value="dough">Pieces × weight each</option>
+            <option value="flour">Total flour I have</option>
+          </select>
+        </div>
+        <div class="field" id="flourTotRow" hidden>
+          <label for="flourTotal">Total flour</label>
+          <div class="num"><input id="flourTotal" type="number" inputmode="decimal" data-kind="w" data-lo="50" data-hi="20000"><span class="suf usuf-w">g</span></div>
+        </div>
+        <div class="field" id="vesselRow" hidden>
+          <label for="vessel">Banneton or tin</label>
+          <select id="vessel"></select>
+          <button type="button" class="btn sm ghost" id="useVessel" hidden></button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <h2 class="glabel">Leavening</h2>
+        <div class="field">
+          <label class="sr" for="leaven">Leavening</label>
+          <select id="leaven">
+            <optgroup label="Wild">
+              <option value="starter">Sourdough starter</option>
+            </optgroup>
+            <optgroup label="Commercial yeast">
+              <option value="instant">Instant dry yeast</option>
+              <option value="active">Active dry yeast</option>
+              <option value="fresh">Fresh (cake) yeast</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="field" id="starterTypeRow" hidden>
+          <label for="starterType">Starter type</label>
+          <select id="starterType">
+            <option value="white">Liquid, white flour (100%)</option>
+            <option value="whole">Liquid, whole wheat (100%)</option>
+            <option value="rye">Rye (100%)</option>
+            <option value="stiff">Stiff or Italian (50%)</option>
+          </select>
+          <p class="hint" id="starterProfile"></p>
+        </div>
+        <div class="field" id="starterRow" hidden>
+          <label for="starterHyd">Starter hydration</label>
+          <div class="num"><input id="starterHyd" type="number" inputmode="numeric" min="30" max="200" step="5"><span class="suf">%</span></div>
+        </div>
+        <p class="hint" id="leavenNote"></p>
+      </div>
+
+      <div class="grp">
+        <h2 class="glabel">Fermentation</h2>
+        <div class="field">
+          <div class="lblrow"><label for="hours" id="hoursLbl">Total rise time</label><output id="hoursOut" for="hours"></output></div>
+          <input id="hours" type="range" min="1" max="72" step="1">
+        </div>
+        <div class="field">
+          <div class="lblrow"><label for="temp">Dough temperature</label><output id="tempOut" for="temp"></output></div>
+          <input id="temp" type="range" min="2" max="32" step="1">
+        </div>
+      </div>
+
+      <div class="grp" id="blendGrp" hidden>
+        <h2 class="glabel"><span>Flour blend</span><span class="tag" id="whiteTag"></span></h2>
+        <div class="field">
+          <label class="sr" for="blend">Blend preset</label>
+          <select id="blend">
+            <option value="default">Style default</option>
+            <option value="white">All white bread flour</option>
+            <option value="ww10">10% whole wheat</option>
+            <option value="ww30">30% whole wheat</option>
+            <option value="ww50">50% whole wheat</option>
+            <option value="ww100">100% whole wheat</option>
+            <option value="rye20">20% rye</option>
+            <option value="spelt30">30% spelt</option>
+            <option value="durum20">20% durum semolina</option>
+            <option value="mixed">Mixed grain</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="whole">Whole wheat</label>
+            <div class="num"><input id="whole" type="number" inputmode="decimal" min="0" max="100" step="5"><span class="suf">%</span></div>
+          </div>
+          <div class="field">
+            <label for="rye">Rye</label>
+            <div class="num"><input id="rye" type="number" inputmode="decimal" min="0" max="100" step="5"><span class="suf">%</span></div>
+          </div>
+          <div class="field">
+            <label for="spelt">Spelt</label>
+            <div class="num"><input id="spelt" type="number" inputmode="decimal" min="0" max="100" step="5"><span class="suf">%</span></div>
+          </div>
+          <div class="field">
+            <label for="semolina">Durum semolina</label>
+            <div class="num"><input id="semolina" type="number" inputmode="decimal" min="0" max="100" step="5"><span class="suf">%</span></div>
+          </div>
+          <div class="field">
+            <label for="buckwheat">Buckwheat</label>
+            <div class="num"><input id="buckwheat" type="number" inputmode="decimal" min="0" max="30" step="5"><span class="suf">%</span></div>
+          </div>
+          <div class="field">
+            <label for="oat">Oat</label>
+            <div class="num"><input id="oat" type="number" inputmode="decimal" min="0" max="30" step="5"><span class="suf">%</span></div>
+          </div>
+        </div>
+        <p class="hint">Percent of total flour. White bread flour makes up the rest.</p>
+        <p class="hint" id="flourHint"></p>
+      </div>
+
+      <div class="grp" id="inclGrp" hidden>
+        <h2 class="glabel">Mix-ins</h2>
+        <div class="row2">
+          <div class="field">
+            <label for="incl">Add</label>
+            <select id="incl"></select>
+          </div>
+          <div class="field" id="inclAmt">
+            <label for="inclPct">Amount</label>
+            <div class="num"><input id="inclPct" type="number" inputmode="decimal" min="0" max="50" step="1"><span class="suf">%</span></div>
+          </div>
+        </div>
+        <p class="hint" id="inclHint"></p>
+      </div>
+
+      <div class="grp">
+        <h2 class="glabel"><span>Formula</span><span class="tag" id="adjusted" hidden>Adjusted</span></h2>
+        <div class="row2">
+          <div class="field">
+            <label for="hydration">Hydration</label>
+            <div class="num"><input id="hydration" type="number" inputmode="decimal" min="40" max="110" step="1"><span class="suf">%</span></div>
+          </div>
+          <div class="field">
+            <label for="salt">Salt</label>
+            <div class="num"><input id="salt" type="number" inputmode="decimal" min="0" max="6" step="0.1"><span class="suf">%</span></div>
+          </div>
+          <div class="field">
+            <label for="fat">Oil or butter</label>
+            <div class="num"><input id="fat" type="number" inputmode="decimal" min="0" max="20" step="0.5"><span class="suf">%</span></div>
+          </div>
+          <div class="field">
+            <label for="sugar">Sugar or honey</label>
+            <div class="num"><input id="sugar" type="number" inputmode="decimal" min="0" max="20" step="0.5"><span class="suf">%</span></div>
+          </div>
+        </div>
+        <button type="button" class="linkbtn" id="reset">Reset to style defaults</button>
+      </div>
+
+      <div class="grp">
+        <h2 class="glabel">My recipes</h2>
+        <div class="savebar">
+          <div class="field">
+            <label for="recName">Recipe name</label>
+            <div class="num"><input id="recName" type="text" maxlength="40" placeholder="Saturday boule"></div>
+          </div>
+          <button type="button" class="btn" id="saveRec">Save</button>
+        </div>
+        <ul class="saved" id="savedList"></ul>
+        <p class="hint" id="savedNote"></p>
+      </div>
+    </form>
+
+    <section class="readout" id="readout" aria-label="Ingredient weights"></section>
+  </div>
+
+  <section class="sdsec" id="sdTools" aria-label="Sourdough tools" hidden>
+    <div><p class="eyebrow">Sourdough tools</p><h2>Plan, feed and troubleshoot</h2></div>
+    <div class="strip"><p id="sdStripText"></p><button type="button" class="btn sm ghost" id="editFormula">Edit formula</button></div>
+    <div class="tools">
+      <div class="card wide">
+        <h3>Bake-day timeline</h3>
+        <p class="sub2" id="tlSummary"></p>
+        <div class="fgrid">
+          <div class="field">
+            <label for="bulkH">Bulk fermentation</label>
+            <div class="num"><input id="bulkH" data-skip type="number" inputmode="decimal" min="1" max="72" step="1"><span class="suf">h</span></div>
+          </div>
+          <div class="field">
+            <label for="doughT">Dough temperature</label>
+            <div class="num"><input id="doughT" data-skip type="number" inputmode="decimal" step="1"><span class="suf usuf-t">°C</span></div>
+          </div>
+          <div class="field">
+            <label for="sdMode">After shaping</label>
+            <select id="sdMode">
+              <option value="room">Proof at room temperature</option>
+              <option value="retard">Cold retard in the fridge</option>
+            </select>
+          </div>
+          <div class="field" id="retardField">
+            <label for="retardH">Fridge time</label>
+            <div class="num"><input id="retardH" type="number" inputmode="numeric" min="4" max="36" step="1"><span class="suf">h</span></div>
+          </div>
+          <div class="field">
+            <label for="autolyse">Autolyse</label>
+            <div class="num"><input id="autolyse" type="number" inputmode="numeric" min="0" max="120" step="15"><span class="suf">min</span></div>
+          </div>
+          <div class="field">
+            <label for="planMode">Plan around</label>
+            <select id="planMode">
+              <option value="bake">When I want to bake</option>
+              <option value="mix">When I start mixing</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="planTime">Time of day</label>
+            <div class="num"><input id="planTime" type="time"></div>
+          </div>
+        </div>
+        <ol class="tl" id="tlList"></ol>
+      </div>
+
+      <div class="card">
+        <h3>Feed your starter</h3>
+        <p class="sub2">This is also your levain build. Set keep-back to 0 to make only what this dough needs.</p>
+        <div class="fgrid">
+          <div class="field">
+            <label for="feedRatio">Feed ratio (seed : flour)</label>
+            <select id="feedRatio">
+              <option value="1">1 : 1, about 4 h</option>
+              <option value="2">1 : 2, about 6 h</option>
+              <option value="5">1 : 5, about 8 h</option>
+              <option value="10">1 : 10, about 12 h</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="keep">Keep back</label>
+            <div class="num"><input id="keep" type="number" inputmode="decimal" data-kind="w" data-lo="0" data-hi="2000"><span class="suf usuf-w">g</span></div>
+          </div>
+        </div>
+        <div id="feedOut"></div>
+      </div>
+
+      <div class="card">
+        <h3>Water temperature</h3>
+        <p class="sub2" id="tempSub"></p>
+        <div class="fgrid">
+          <div class="field">
+            <label for="roomT">Room</label>
+            <div class="num"><input id="roomT" type="number" inputmode="decimal" data-kind="t" data-lo="0" data-hi="45"><span class="suf usuf-t">°C</span></div>
+          </div>
+          <div class="field">
+            <label for="flourT">Flour</label>
+            <div class="num"><input id="flourT" type="number" inputmode="decimal" data-kind="t" data-lo="0" data-hi="45"><span class="suf usuf-t">°C</span></div>
+          </div>
+          <div class="field">
+            <label for="starterT">Starter</label>
+            <div class="num"><input id="starterT" type="number" inputmode="decimal" data-kind="t" data-lo="0" data-hi="45"><span class="suf usuf-t">°C</span></div>
+          </div>
+          <div class="field">
+            <label for="friction">Mixing</label>
+            <select id="friction">
+              <option value="0">By hand</option>
+              <option value="8">Stand mixer</option>
+              <option value="12">Spiral mixer</option>
+            </select>
+          </div>
+        </div>
+        <div id="waterOut"></div>
+      </div>
+
+      <div class="card wide">
+        <h3>Is it ready?</h3>
+        <div id="readyList"></div>
+      </div>
+
+      <div class="card wide">
+        <h3>Troubleshooting</h3>
+        <div id="troubleList"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="notes" id="notes" aria-label="Suggestions for this style"></section>
+</main></div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var clamp = function(v,a,b){ return Math.min(b, Math.max(a, v)); };
+
+  var K_YEAST = 3.5;     // instant yeast % of flour = K / (hours x temperature factor)
+  var K_STARTER = 180;   // starter fraction of flour, same idea
+  var CONV = { instant:1, active:1.25, fresh:3 };
+  var LEAVEN = {
+    starter:{ label:'Sourdough starter' },
+    instant:{ label:'Instant dry yeast', short:'Instant' },
+    active:{ label:'Active dry yeast', short:'Active dry' },
+    fresh:{ label:'Fresh (cake) yeast', short:'Fresh' }
+  };
+  var FLOURS = [
+    { k:'whole', name:'Whole wheat flour', bump:0.08, tip:'Whole wheat: nutty and moist. Bran cuts gluten, so expect a denser loaf.' },
+    { k:'rye', name:'Rye flour', bump:0.07, tip:'Rye: earthy and tangy, sticky dough with little gluten. Above 30% the crumb turns dense.' },
+    { k:'spelt', name:'Spelt flour', bump:0, tip:'Spelt: sweet and nutty. Gluten is weak, so go gently on kneading and proofing.' },
+    { k:'semolina', name:'Durum semolina', bump:0.02, tip:'Durum: golden, chewy crumb. Use fine semolina (semola rimacinata) for bread.' },
+    { k:'buckwheat', name:'Buckwheat flour', bump:0.05, tip:'Buckwheat: strong flavour and no gluten. Keep it at 20% or less.' },
+    { k:'oat', name:'Oat flour', bump:0.1, tip:'Oat: soft and slightly sweet. It drinks water and adds no gluten.' }
+  ];
+  var FLOUR_KEYS = FLOURS.map(function(f){ return f.k; });
+  var BLENDS = {
+    white:{}, ww10:{whole:10}, ww30:{whole:30}, ww50:{whole:50}, ww100:{whole:100},
+    rye20:{rye:20}, spelt30:{spelt:30}, durum20:{semolina:20}, mixed:{whole:20, rye:10, spelt:10}
+  };
+  var FORMULA_KEYS = ['hydration','salt','fat','sugar','hours','temp'].concat(FLOUR_KEYS);
+
+  var DATA = {
+    pizza:{ label:'Pizza', styles:[
+      { id:'neapolitan', name:'Neapolitan',
+        p:{ hydration:62, salt:2.8, fat:0, sugar:0, whole:0, pieces:4, weight:250, hours:18, temp:20 },
+        blurb:'Soft, airy rim with leopard spots and a thin centre. Built for a very hot oven.',
+        flour:'Tipo 00 or bread flour, 12–13% protein.',
+        method:[
+          'Dissolve the salt in the water, then add the yeast or starter. Add the flour in two parts.',
+          'Knead 8–10 minutes until smooth, then rest 30 minutes.',
+          'Divide into balls and place them in a lightly oiled, covered container.',
+          'Ferment for the time you set. If you use the fridge, take the balls out 1–2 hours before baking.'
+        ],
+        bake:'Wood oven at 430–480 °C for 60–90 seconds. At home, heat a baking steel or stone for 45 minutes at your oven’s maximum, bake 5–7 minutes, then finish under the grill.',
+        tips:[
+          'Stretch by hand from the centre out and leave the rim untouched.',
+          'Drained fior di latte and crushed tomato with only salt keep the centre from going soggy.',
+          'A ready ball has roughly doubled and springs back slowly when poked.'
+        ] },
+      { id:'newyork', name:'New York',
+        p:{ hydration:63, salt:2, fat:2, sugar:1.5, whole:0, pieces:3, weight:280, hours:48, temp:4 },
+        blurb:'Large, foldable slice with a crisp underside and a chewy bite. Oil and sugar help it brown in a home oven.',
+        flour:'High-protein bread flour, 12–14%.',
+        method:[
+          'Mix water, sugar, yeast and salt, then the flour. Add the oil at the end.',
+          'Knead 10 minutes until smooth and stretchy.',
+          'Ball the dough and refrigerate it in oiled containers for the time you set. 24–72 hours works.',
+          'Rest at room temperature for 1–2 hours before stretching.'
+        ],
+        bake:'Preheat a steel or stone for an hour at 260–290 °C. Bake 7–10 minutes on the upper-middle rack.',
+        tips:[
+          'Cold fermentation builds flavour and browning. 48 hours is a good sweet spot.',
+          'Low-moisture mozzarella melts without releasing much water.',
+          'These balls stretch to about 30 cm.'
+        ] },
+      { id:'pan', name:'Pan / Detroit',
+        p:{ hydration:72, salt:2, fat:2, sugar:0, whole:0, pieces:1, weight:480, hours:6, temp:22 },
+        blurb:'Thick, airy crumb with a fried, crunchy base and a caramelised cheese edge.',
+        flour:'Bread flour, 12–13%.',
+        method:[
+          'Stir everything together until no dry flour remains, then rest 20 minutes.',
+          'Do 2–3 sets of stretch and folds, 30 minutes apart.',
+          'Press the dough into a well-oiled 25 × 35 cm pan and rest until puffy.',
+          'Cover with cheese all the way to the edges and spoon sauce on top.'
+        ],
+        bake:'260 °C for 12–15 minutes on a low rack, until the cheese edge is dark brown.',
+        tips:[
+          'Brick cheese or low-moisture mozzarella pushed to the pan wall makes the crisp edge.',
+          'Add 2 tablespoons of oil to the pan on top of what is in the dough.',
+          'Sauce goes on after the cheese, in stripes.'
+        ] },
+      { id:'taglio', name:'Roman al taglio',
+        p:{ hydration:80, salt:2.2, fat:3, sugar:0, whole:0, pieces:1, weight:700, hours:36, temp:6 },
+        blurb:'Very wet, open and light. Baked in a tray and cut with scissors.',
+        flour:'Bread flour, 12–13%.',
+        method:[
+          'Mix flour and water for 5 minutes and rest 30 minutes. Then add salt, yeast and oil.',
+          'Fold a few times during the first hour.',
+          'Ferment in the fridge for the time you set. 24–48 hours works.',
+          'Tip into an oiled 25 × 35 cm tray, stretch gently and rest about 2 hours until puffed.'
+        ],
+        bake:'250–270 °C for 15–20 minutes on a low rack. Add delicate toppings for the last few minutes.',
+        tips:[
+          'Keep your fingers wet or oiled. The dough is sticky.',
+          'Potato and rosemary is a classic topping.',
+          'Fresh tomatoes and burrata go on after baking.'
+        ] }
+    ]},
+    bread:{ label:'Bread', styles:[
+      { id:'sandwich', name:'Soft sandwich loaf',
+        p:{ hydration:65, salt:2, fat:6, sugar:5, whole:0, pieces:1, weight:800, hours:3, temp:26 },
+        blurb:'Tender, even crumb that slices cleanly and stays soft for days.',
+        flour:'Bread flour, 12–13%.',
+        method:[
+          'Use warm milk or water, about 30 °C. Mix everything except the butter and knead 5 minutes.',
+          'Add soft butter in pieces and knead 8–10 minutes until stretchy.',
+          'Rise until doubled, shape into a loaf and place it in a 23 × 13 cm tin.',
+          'Proof until the dough crowns about 2 cm above the rim.'
+        ],
+        bake:'190 °C for 30–35 minutes. The loaf is done at 90–93 °C inside. Cool fully before slicing.',
+        tips:[
+          'Brush the top with milk or melted butter for a softer crust.',
+          'Swap the water for milk for a richer crumb.',
+          'Sugar above 5% slows yeast, so allow extra rising time.'
+        ] },
+      { id:'boule', name:'Rustic boule',
+        p:{ hydration:75, salt:2, fat:0, sugar:0, whole:0, pieces:1, weight:900, hours:14, temp:20 },
+        blurb:'Crackly crust and a chewy, open crumb from a long, hands-off rise.',
+        flour:'Bread flour, with up to 20% whole wheat if you like.',
+        method:[
+          'Stir flour, water, salt and yeast into a shaggy dough and cover it.',
+          'Leave it for the time you set, until bubbly and more than doubled.',
+          'Fold the dough over itself a few times on a floured surface and shape into a round.',
+          'Rest in a floured bowl or banneton for 1 hour while a Dutch oven preheats.'
+        ],
+        bake:'Dutch oven preheated to 230–245 °C. Bake 30 minutes with the lid on, then 12–15 minutes with it off, until deep brown.',
+        tips:[
+          'A slightly underproofed dough bakes taller than an overproofed one.',
+          'Bake on parchment so you can lower it into the hot pot.',
+          'Cool for an hour before slicing.'
+        ] },
+      { id:'baguette', name:'Baguette',
+        p:{ hydration:70, salt:2, fat:0, sugar:0, whole:0, pieces:3, weight:250, hours:5, temp:22 },
+        blurb:'Thin, crisp crust and an irregular crumb. Steam and scoring matter as much as the dough.',
+        flour:'Bread flour or French T65, 11–12%.',
+        method:[
+          'Mix and rest 30 minutes, then fold three times at 45-minute intervals.',
+          'Divide and pre-shape into rough logs. Rest 20 minutes.',
+          'Shape each piece into a 35–40 cm baguette and proof on a floured cloth for about 45 minutes.',
+          'Score 3–5 diagonal cuts just before baking.'
+        ],
+        bake:'245 °C with steam, from a tray of boiling water or ice on the oven floor, for 20–25 minutes.',
+        tips:[
+          'For more flavour, set 14 hours at 5 °C above and the yeast amount adjusts.',
+          'Hold a very sharp blade at a shallow angle when scoring.',
+          'Bake until deep golden, not pale.'
+        ] },
+      { id:'ciabatta', name:'Ciabatta',
+        p:{ hydration:80, salt:2, fat:2, sugar:0, whole:0, pieces:2, weight:400, hours:12, temp:20 },
+        blurb:'Wet, bubbly dough with big holes and a thin, crisp crust.',
+        flour:'Strong bread flour, 12–13%, to carry the water.',
+        method:[
+          'Mix to a very loose dough and rest 30 minutes.',
+          'Do three sets of stretch and folds, 30 minutes apart.',
+          'Ferment for the time you set, until full of bubbles and doubled.',
+          'Tip onto a well-floured surface, cut in two, stretch into rectangles and rest 30 minutes.'
+        ],
+        bake:'230 °C with steam for 22–25 minutes, until deep golden.',
+        tips:[
+          'Wet your hands instead of adding flour to the dough.',
+          'Handle gently to keep the bubbles.',
+          'Move the loaves on floured cloth or parchment.'
+        ] },
+      { id:'focaccia', name:'Focaccia',
+        p:{ hydration:78, salt:2.2, fat:6, sugar:0, whole:0, pieces:1, weight:1000, hours:24, temp:5 },
+        blurb:'Olive oil rich, dimpled and golden, with a crisp base and a soft inside.',
+        flour:'Bread flour, 12–13%.',
+        method:[
+          'Mix everything until no dry flour remains and rest 30 minutes.',
+          'Fold three times at 30-minute intervals, then refrigerate for the time you set.',
+          'Tip into a well-oiled 30 × 40 cm tray, stretch and rest 1–2 hours until puffy.',
+          'Dimple with oiled fingers and add toppings.'
+        ],
+        bake:'230 °C for 20–25 minutes on a low rack, until golden.',
+        tips:[
+          'Pour extra olive oil into the tray. It fries the base.',
+          'A splash of salted water or oil in the dimples keeps the top soft.',
+          'Add rosemary or tomatoes before baking and flaky salt after.'
+        ] }
+    ]},
+    sourdough:{ label:'Sourdough', styles:[
+      { id:'country', name:'Country loaf',
+        p:{ hydration:75, salt:2, fat:0, sugar:0, whole:10, pieces:1, weight:850, hours:8, temp:24 },
+        blurb:'Open crumb, blistered crust and a mild tang. A reliable first sourdough.',
+        flour:'Bread flour plus 10% whole wheat or rye.',
+        method:[
+          'Mix flour and water and rest 45 minutes, then mix in the starter and salt.',
+          'Bulk ferment warm for the time you set, with 3–4 sets of stretch and folds in the first 2 hours.',
+          'Shape tightly, place in a floured banneton and refrigerate 8–14 hours.',
+          'Bake straight from the fridge.'
+        ],
+        bake:'Dutch oven preheated to 245 °C. Bake 20 minutes covered, then 20–25 minutes uncovered at 220 °C.',
+        tips:[
+          'Use the starter ripe: doubled, domed and bubbly, 4–8 hours after feeding.',
+          'The dough is ready to shape when it is up 50–75%, jiggly, with bubbles on the surface.',
+          'Score about 0.5 cm deep with a sharp blade.'
+        ] },
+      { id:'opencrumb', name:'Open crumb',
+        p:{ hydration:82, salt:2, fat:0, sugar:0, whole:0, pieces:1, weight:900, hours:7, temp:25 },
+        blurb:'Wetter dough for a glossy, airy crumb with large holes.',
+        flour:'Strong bread flour, 12.5–13.5% protein.',
+        method:[
+          'Mix flour with 90% of the water and rest 1 hour. Then add the starter, salt and the rest of the water.',
+          'Do four sets of stretch and folds every 30 minutes, then leave to bulk for the time you set.',
+          'Pre-shape, rest 20 minutes, final shape and chill overnight.'
+        ],
+        bake:'Dutch oven preheated to 250 °C. Bake 20 minutes covered, then 20 minutes uncovered at 225 °C.',
+        tips:[
+          'Wet hands work better than flour at this hydration.',
+          'Weak flour slumps at 80% and above, so use strong flour.',
+          'In summer, keep the dough cool to avoid overproofing.'
+        ] },
+      { id:'wholewheat', name:'Whole wheat',
+        p:{ hydration:80, salt:2, fat:0, sugar:0, whole:50, pieces:1, weight:900, hours:6, temp:25 },
+        blurb:'Nutty, deeper flavour and a moist crumb. Half whole wheat is a good balance.',
+        flour:'Half bread flour, half stoneground whole wheat.',
+        method:[
+          'Mix the flours with the water and rest 1 hour so the bran softens.',
+          'Add starter and salt, then fold three times over the first 90 minutes.',
+          'Bulk for the time you set. Whole wheat ferments faster than white flour.',
+          'Shape and proof in a banneton for 1–2 hours, or refrigerate overnight.'
+        ],
+        bake:'Dutch oven preheated to 240 °C. Bake 20 minutes covered, then 20 minutes uncovered at 220 °C.',
+        tips:[
+          'Whole wheat drinks more water, so 80% still feels like a normal dough.',
+          'Sift out some coarse bran for a lighter crumb.',
+          'A spoonful of honey gives a milder, sweeter loaf.'
+        ] },
+      { id:'sdsandwich', name:'Sandwich loaf',
+        p:{ hydration:68, salt:2, fat:4, sugar:3, whole:0, pieces:1, weight:800, hours:6, temp:26 },
+        blurb:'Soft, sliceable loaf with a gentle tang.',
+        flour:'Bread flour.',
+        method:[
+          'Mix flour, water, starter, honey and salt and knead until smooth. Then knead in soft butter.',
+          'Bulk ferment for the time you set, until risen by about 50%.',
+          'Shape into a loaf and place it seam-down in a 23 × 13 cm tin.',
+          'Proof 1–2 hours, until crowned above the rim.'
+        ],
+        bake:'200 °C for 35–40 minutes, until the inside reaches 93–96 °C.',
+        tips:[
+          'Honey feeds the starter and browns the crust.',
+          'Cool fully before slicing. The crumb sets as it cools.',
+          'Wrapped well, it stays soft for 3–4 days.'
+        ] },
+      { id:'sdpizza', name:'Pizza',
+        p:{ hydration:65, salt:2.8, fat:0, sugar:0, whole:0, pieces:4, weight:250, hours:12, temp:20 },
+        blurb:'Chewy crust with a mild sour edge and good blistering.',
+        flour:'Tipo 00 or bread flour.',
+        method:[
+          'Mix flour and water, rest 30 minutes, then add the starter and salt.',
+          'Fold twice, then divide into balls after a 2-hour rest.',
+          'Proof the balls for the rest of the time you set.',
+          'Stretch by hand.'
+        ],
+        bake:'As Neapolitan: steel or stone heated for 45 minutes at your oven’s maximum, then bake 5–7 minutes.',
+        tips:[
+          'A starter fed 4–6 hours earlier gives a milder flavour.',
+          'For a cold proof, set 24 hours at 5 °C and the starter amount adjusts.',
+          'Drain mozzarella well to protect the crust.'
+        ] }
+    ]}
+  };
+
+  var state = { cat:'pizza', styleId:'neapolitan', leaven:'instant', starterHyd:100, starterType:'white',
+    units:'metric', scaleBy:'dough', flourTotal:500, incl:'none', inclPct:0, vessel:'none',
+    sdMode:'room', autolyse:30, retardH:12, bakeMin:40, planMode:'bake', planTime:'09:00',
+    roomT:22, flourT:22, starterT:22, friction:0, feedRatio:5, keep:50, page:'recipe' };
+
+  function styleList(){ return DATA[state.cat].styles; }
+  function currentStyle(){
+    var l = styleList();
+    for (var i=0;i<l.length;i++){ if (l[i].id===state.styleId) return l[i]; }
+    return l[0];
+  }
+  function applyPreset(){
+    var p = currentStyle().p;
+    for (var k in p){ state[k] = p[k]; }
+    FLOUR_KEYS.forEach(function(k){ state[k] = p[k] || 0; });
+    state.incl = 'none'; state.inclPct = 0; state.vessel = 'none';
+    if (p.sdMode === undefined) state.sdMode = 'room';
+    if (p.autolyse === undefined) state.autolyse = 30;
+    if (p.retardH === undefined) state.retardH = 12;
+    if (p.bakeMin === undefined) state.bakeMin = 40;
+  }
+
+  /* formatting */
+  function fmtG(x){
+    if (x >= 100) return Math.round(x).toLocaleString('en-US');
+    if (x >= 1) return String(Number(x.toFixed(1)));
+    return String(Number(x.toFixed(2)));
+  }
+  function fmtPct(x){
+    if (x < 1) return x.toFixed(2);
+    if (x < 10) return String(Number(x.toFixed(1)));
+    return String(Number(x.toFixed(1)));
+  }
+  var FR = ['','⅛','¼','⅜','½','⅝','¾','⅞'];
+  function tspText(g){
+    var n = Math.round((g/3.1)*8);
+    if (n < 1) return '≈ a small pinch';
+    var whole = Math.floor(n/8), rem = n % 8;
+    var s = (whole ? String(whole) : '') + FR[rem];
+    return '≈ ' + s + ' tsp';
+  }
+  function yeastHint(type, g){
+    if (type==='instant') return tspText(g) + ' · mix into the flour';
+    if (type==='active') return tspText(g) + ' · bloom in warm water first';
+    return 'crumble into the water';
+  }
+  function tempLabel(t){
+    if (t <= 8) return 'fridge';
+    if (t <= 17) return 'cool room';
+    if (t <= 24) return 'room temperature';
+    return 'warm';
+  }
+
+  /* the maths */
+  function compute(s){
+    var H=s.hydration/100, S=s.salt/100, O=s.fat/100, Su=s.sugar/100;
+    var Inc = (s.incl && s.incl !== 'none') ? (Number(s.inclPct)||0)/100 : 0;
+    var byFlour = s.scaleBy === 'flour';
+    var total = s.pieces * s.weight;
+    var factor = Math.pow(2, (s.temp-20)/10);
+    var base = 1 + H + S + O + Su + Inc;
+    var o = { total:total, rows:[], warn:'', equiv:null, starter:null, F:0, water:0, pf:null };
+    var F, addFlour, addWater, lev, yf = 0;
+    if (s.leaven==='starter'){
+      var sp = STARTER_TYPES[s.starterType] || STARTER_TYPES.white;
+      var sh = s.starterHyd/100;
+      var frac = clamp(K_STARTER/(s.hours*factor*sp.speed)/100, 0.03, 0.35);
+      F = byFlour ? s.flourTotal : total/base;
+      var sw = frac*F, sf = sw/(1+sh), swa = sw - sf;
+      addFlour = F - sf;
+      addWater = H*F - swa;
+      if (addWater < 0){
+        addWater = 0;
+        o.warn = 'Hydration is lower than the water already in the starter. Raise hydration or shorten the rise.';
+      }
+      lev = { kind:'leaven', name:LEAVEN.starter.label, sub:'holds ' + fmtW(sf) + ' flour + ' + fmtW(swa) + ' water', g:sw };
+      o.starter = { sw:sw, sf:sf, swa:swa, frac:frac };
+      o.pf = sf/F*100;
+    } else {
+      var inst = clamp(K_YEAST/(s.hours*factor)/100, 0.0002, 0.025);
+      yf = inst*CONV[s.leaven];
+      F = byFlour ? s.flourTotal : total/(base + yf);
+      addFlour = F;
+      addWater = H*F;
+      var yg = F*yf;
+      lev = { kind:'leaven', name:LEAVEN[s.leaven].label, sub:yeastHint(s.leaven, yg), g:yg };
+      o.equiv = { instant:F*inst, active:F*inst*CONV.active, fresh:F*inst*CONV.fresh };
+    }
+    if (byFlour) total = F*(base + yf);
+    o.total = total; o.each = total/s.pieces;
+    o.addFlour = addFlour; o.addWater = addWater; o.salt = S*F;
+    var inSt = o.starter;
+    var want = 0;
+    FLOURS.forEach(function(f){ want += F*(s[f.k]||0)/100; });
+    var scale = want > addFlour ? addFlour/want : 1;
+    if (scale < 1 && !o.warn) o.warn = 'The blend uses more flour than the recipe has. It has been scaled down to fit.';
+    var blend = [];
+    FLOURS.forEach(function(f){
+      var g = F*(s[f.k]||0)/100*scale;
+      if (g > 0.5) blend.push({ name:f.name, g:g });
+    });
+    var blendG = 0;
+    blend.forEach(function(x){ blendG += x.g; });
+    var whiteG = Math.max(0, addFlour - blendG);
+    var note = inSt ? 'plus ' + fmtW(inSt.sf) + ' in the starter' : '';
+    var rows = [], noted = false;
+    if (whiteG > 0.5){
+      rows.push({ name: blend.length ? 'White bread flour' : 'Flour', sub:note, g:whiteG });
+      noted = true;
+    }
+    blend.forEach(function(x){
+      rows.push({ name:x.name, sub: noted ? '' : note, g:x.g });
+      noted = true;
+    });
+    rows.push({ name:'Water', sub: inSt ? 'plus ' + fmtW(inSt.swa) + ' in the starter' : '', g:addWater });
+    rows.push(lev);
+    rows.push({ name:'Salt', sub:'', g:S*F });
+    if (s.sugar > 0) rows.push({ name:'Sugar or honey', sub:'', g:Su*F });
+    if (s.fat > 0) rows.push({ name:'Olive oil or butter', sub:'', g:O*F });
+    if (Inc > 0) rows.push({ name:INCL[s.incl].short, sub:'fold in at the last stretch and fold', g:Inc*F });
+    for (var i=0;i<rows.length;i++){ rows[i].pct = rows[i].g / F * 100; }
+    o.rows = rows; o.F = F; o.water = H*F;
+    return o;
+  }
+
+  /* rendering */
+  function renderTabs(){
+    var h = '';
+    for (var k in DATA){
+      h += '<button type="button" data-cat="' + k + '" aria-pressed="' + (k===state.cat) + '">' + DATA[k].label + '</button>';
+    }
+    $('tabs').innerHTML = h;
+  }
+  function renderStyles(){
+    var h = '';
+    styleList().forEach(function(st){
+      h += '<button type="button" class="chip" data-style="' + st.id + '" aria-pressed="' + (st.id===state.styleId) + '">' +
+           '<span class="n">' + st.name + '</span>' +
+           '<span class="m">' + st.p.hydration + '% · ' + st.p.hours + ' h</span></button>';
+    });
+    $('styles').innerHTML = h;
+  }
+  function renderNotes(){
+    var st = currentStyle();
+    var h = '<div><p class="eyebrow">' + DATA[state.cat].label + ' suggestions</p><h2>' + st.name + '</h2><p class="blurb">' + L(st.blurb) + '</p></div>';
+    h += '<div class="cols"><div><h3>Method</h3><ol>' + st.method.map(function(m){ return '<li>' + L(m) + '</li>'; }).join('') + '</ol></div>';
+    h += '<div><h3>Bake</h3><p>' + L(st.bake) + '</p><h3>Flour</h3><p>' + L(st.flour) + '</p></div>';
+    h += '<div><h3>Tips</h3><ul>' + st.tips.map(function(t){ return '<li>' + L(t) + '</li>'; }).join('') + '</ul></div></div>';
+    $('notes').innerHTML = h;
+  }
+  function syncControls(){
+    Array.prototype.forEach.call(document.querySelectorAll('input[type=number]'), function(el){
+      if (state[el.id] === undefined) return;
+      if (el.getAttribute('data-kind') === 'w') el.step = state.units === 'imperial' ? '0.5' : '10';
+      el.value = fieldVal(el);
+    });
+    $('hours').value = state.hours;
+    $('temp').value = state.temp;
+    $('leaven').value = state.leaven;
+    ['scaleBy','incl','starterType','vessel','sdMode','planMode','friction','feedRatio'].forEach(function(id){ $(id).value = String(state[id]); });
+    $('planTime').value = state.planTime;
+    $('bulkH').value = state.hours;
+    $('doughT').value = fromBase('t', state.temp);
+  }
+  function leavenNote(){
+    if (state.cat==='sourdough' && state.leaven!=='starter')
+      return 'This style is built for a starter. Yeast works too, with a milder flavour.';
+    if (state.cat!=='sourdough' && state.leaven==='starter')
+      return 'A starter replaces the yeast. Expect a slight tang. The amount is set from your time and temperature.';
+    if (state.leaven==='starter')
+      return 'Use your starter ripe, at its peak, 4–8 hours after feeding.';
+    return 'Yeast amount is set from your time and temperature.';
+  }
+  function renderReadout(c, s, st){
+    var rows = c.rows.map(function(r){
+      var w = wParts(r.g);
+      return '<tr' + (r.kind==='leaven' ? ' class="is-leaven"' : '') + '><th scope="row"><span class="ing">' + r.name + '</span>' +
+        (r.sub ? '<span class="sub">' + r.sub + '</span>' : '') + '</th>' +
+        '<td class="pct">' + fmtPct(r.pct) + '%</td>' +
+        '<td class="g">' + w.n + '<span class="u">' + w.u + '</span></td></tr>';
+    }).join('');
+    var tw = wParts(c.total);
+    var h = '<div class="r-head"><div><p class="eyebrow">Formula</p><h2>' + st.name + '</h2>' +
+      '<p class="r-sub">' + s.pieces + ' × ' + fmtW(c.each) + ' · ' + LEAVEN[s.leaven].label + '</p></div>' +
+      '<div class="total"><span class="lbl">Total dough</span><span class="val">' + tw.n + '<small>' + tw.u + '</small></span></div></div>';
+    h += '<table><thead><tr><th scope="col">Ingredient</th><th scope="col">Baker’s %</th><th scope="col">Weight</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    h += '<p class="sum"><span>Total flour <b>' + fmtW(c.F) + '</b></span><span>Total water <b>' + fmtW(c.water) + '</b></span><span>Hydration <b>' + s.hydration + '%</b></span>';
+    if (c.pf !== null){
+      h += '<span>Prefermented flour <b>' + fmtPct(c.pf) + '% · ' + (c.pf < 6 ? 'mild' : c.pf < 12 ? 'balanced' : 'tangy') + '</b></span>';
+    }
+    h += '</p>';
+    if (c.warn) h += '<p class="warn">' + c.warn + '</p>';
+    if (c.equiv){
+      h += '<div class="equiv"><p class="lbl">Same rise, other yeast</p><div class="eq-row">';
+      ['instant','active','fresh'].forEach(function(k){
+        h += '<button type="button" data-leaven="' + k + '" aria-pressed="' + (k===s.leaven) + '"><span>' + LEAVEN[k].short + '</span><b>' + fmtW(c.equiv[k]) + '</b></button>';
+      });
+      h += '</div></div>';
+    }
+    h += '<p class="foot">Leavening is an estimate for your time and temperature. Adjust by about 20% for your flour and kitchen.</p>';
+    $('readout').innerHTML = h;
+  }
+  function vecOf(src){
+    var v = {};
+    FLOUR_KEYS.forEach(function(k){ v[k] = Number(src[k]) || 0; });
+    return v;
+  }
+  function sameVec(a,b){
+    return FLOUR_KEYS.every(function(k){ return (a[k]||0) === (b[k]||0); });
+  }
+  function matchBlend(){
+    var cur = vecOf(state);
+    if (sameVec(cur, vecOf(currentStyle().p))) return 'default';
+    for (var id in BLENDS){ if (sameVec(cur, vecOf(BLENDS[id]))) return id; }
+    return 'custom';
+  }
+  function renderBlend(){
+    var s = state, show = s.cat !== 'pizza';
+    $('blendGrp').hidden = !show;
+    if (!show) return;
+    var sum = 0, tips = [], bump = 0;
+    FLOURS.forEach(function(f){
+      var v = Number(s[f.k]) || 0;
+      sum += v;
+      if (v > 0){ tips.push(f.tip); bump += v * f.bump; }
+    });
+    $('whiteTag').textContent = 'White ' + Math.max(0, Math.round((100 - sum)*10)/10) + '%';
+    var txt = tips.join(' ');
+    bump = Math.round(bump);
+    if (bump >= 1) txt += ' These flours take up more water. Consider about ' + bump + ' points more hydration.';
+    if (sum > 100) txt = 'The blend adds up to ' + sum + '%. It is scaled down to fit.';
+    $('flourHint').textContent = txt;
+    $('flourHint').hidden = !txt;
+    $('blend').value = matchBlend();
+  }
+  function updateResults(){
+    var s = state, st = currentStyle();
+    $('hoursLbl').textContent = s.cat === 'sourdough' ? 'Bulk fermentation' : 'Total rise time';
+    $('hoursOut').textContent = s.hours + ' h';
+    $('tempOut').textContent = tempText(s.temp) + ' · ' + tempLabel(s.temp);
+    $('starterRow').hidden = s.leaven !== 'starter';
+    $('leavenNote').textContent = leavenNote();
+    var dirty = FORMULA_KEYS.some(function(k){ return Number(s[k]) !== Number(st.p[k]); });
+    $('adjusted').hidden = !dirty;
+    $('reset').disabled = !dirty;
+    var c = compute(s);
+    renderBlend();
+    renderReadout(c, s, st);
+    renderExtras(c);
+  }
+  function renderAll(){
+    renderTabs(); renderStyles(); renderNotes(); syncControls(); updateResults(); renderSaved();
+  }
+
+  /* events */
+  $('tabs').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-cat]');
+    if (!b) return;
+    state.cat = b.getAttribute('data-cat');
+    if (state.cat==='sourdough') state.leaven = 'starter';
+    else if (state.leaven==='starter') state.leaven = 'instant';
+    state.styleId = styleList()[0].id;
+    applyPreset();
+    renderAll();
+  });
+  $('styles').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-style]');
+    if (!b) return;
+    state.styleId = b.getAttribute('data-style');
+    applyPreset();
+    renderAll();
+  });
+  $('readout').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-leaven]');
+    if (!b) return;
+    state.leaven = b.getAttribute('data-leaven');
+    $('leaven').value = state.leaven;
+    updateResults();
+  });
+  $('leaven').addEventListener('change', function(){
+    state.leaven = $('leaven').value;
+    updateResults();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[type=number]'), function(el){
+    if (el.hasAttribute('data-skip')) return;
+    el.addEventListener('input', function(){
+      var v = parseFloat(el.value);
+      if (!isFinite(v)) return;
+      var kind = el.getAttribute('data-kind');
+      if (kind) v = toBase(kind, v);
+      if (el.id==='pieces') v = Math.round(v);
+      state[el.id] = clamp(v, limit(el,'lo'), limit(el,'hi'));
+      updateResults();
+    });
+    el.addEventListener('blur', function(){ el.value = fieldVal(el); });
+  });
+  ['hours','temp'].forEach(function(id){
+    $(id).addEventListener('input', function(){
+      state[id] = Number($(id).value);
+      updateResults();
+    });
+  });
+  $('reset').addEventListener('click', function(){
+    var p = currentStyle().p;
+    FORMULA_KEYS.forEach(function(k){ state[k] = p[k]; });
+    syncControls();
+    updateResults();
+  });
+  $('blend').addEventListener('change', function(){
+    var id = $('blend').value;
+    if (id === 'custom') return;
+    var src = id === 'default' ? currentStyle().p : BLENDS[id];
+    FLOUR_KEYS.forEach(function(k){ state[k] = src[k] || 0; });
+    syncControls();
+    updateResults();
+  });
+  var view = window.innerWidth < 760 ? 'mobile' : 'desktop';
+  try {
+    var sv = localStorage.getItem('dough-view');
+    if (sv === 'mobile' || sv === 'desktop') view = sv;
+  } catch (e) {}
+  function applyView(){
+    $('app').setAttribute('data-view', view);
+    Array.prototype.forEach.call(document.querySelectorAll('#viewSwitch button'), function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-view') === view));
+    });
+  }
+  $('viewSwitch').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-view]');
+    if (!b) return;
+    view = b.getAttribute('data-view');
+    try { localStorage.setItem('dough-view', view); } catch (e2) {}
+    applyView();
+  });
+  applyView();
+  $('controls').addEventListener('submit', function(e){ e.preventDefault(); });
+
+  /* ---- units, mix-ins, vessels, sourdough tools, saved recipes ---- */
+  var G_OZ = 28.3495;
+  var STARTER_TYPES = {
+    white:{ hyd:100, speed:1, note:'Mild and balanced. The easiest starter to predict.' },
+    whole:{ hyd:100, speed:1.15, note:'Ferments faster and tastes nuttier. Use a little less than a white starter.' },
+    rye:{ hyd:100, speed:1.2, note:'Very active and tangy. Peaks quickly, so watch the clock.' },
+    stiff:{ hyd:50, speed:0.85, note:'Slower and milder, with more acetic sharpness. Mix it well into the dough.' }
+  };
+  var INCL = {
+    seeds:{ name:'Seeds (sunflower, pumpkin, sesame, flax)', short:'Seeds', pct:12, hint:'Toast lightly, then soak in an equal weight of hot water for an hour and drain.' },
+    walnuts:{ name:'Walnuts', short:'Walnuts', pct:15, hint:'Toast and roughly chop. Add at the last fold so they do not tear the dough.' },
+    olives:{ name:'Olives', short:'Olives', pct:15, hint:'Pat dry. Wet olives add water and make the dough slack.' },
+    cheese:{ name:'Cheese, cubed', short:'Cheese', pct:20, hint:'Use hard, dry cheese such as cheddar or gruyère and add at the last fold.' },
+    fruit:{ name:'Dried fruit', short:'Dried fruit', pct:15, hint:'Soak raisins or cranberries for 30 minutes and drain well.' },
+    custom:{ name:'Other mix-in', short:'Mix-in', pct:10, hint:'Fold in at the last stretch and fold.' }
+  };
+  var VESSELS = [
+    { id:'none', name:'Choose a size', g:0 },
+    { id:'b18', name:'Round banneton, 18 cm', g:600 },
+    { id:'b20', name:'Round banneton, 20 cm', g:750 },
+    { id:'b23', name:'Round banneton, 23 cm', g:950 },
+    { id:'o25', name:'Oval banneton, 25 cm', g:800 },
+    { id:'o28', name:'Oval banneton, 28 cm', g:1000 },
+    { id:'t23', name:'Loaf tin, 23 × 13 cm', g:800 },
+    { id:'t25', name:'Loaf tin, 25 × 11 cm', g:950 }
+  ];
+  var SD_EXTRA = {
+    country:{ sdMode:'retard', autolyse:45, retardH:12, bakeMin:45 },
+    sdboule:{ sdMode:'retard', autolyse:60, retardH:14, bakeMin:50 },
+    opencrumb:{ sdMode:'retard', autolyse:60, retardH:14, bakeMin:40 },
+    wholewheat:{ sdMode:'retard', autolyse:60, retardH:12, bakeMin:40 },
+    sdsandwich:{ sdMode:'room', autolyse:0, bakeMin:38 },
+    sdpizza:{ sdMode:'retard', autolyse:30, retardH:24, bakeMin:7 }
+  };
+  DATA.sourdough.styles.splice(1, 0, {
+    id:'sdboule', name:'Rustic boule',
+    p:{ hydration:78, salt:2, fat:0, sugar:0, whole:15, rye:5, pieces:1, weight:900, hours:7, temp:24 },
+    blurb:'Dark, thick, crackling crust and a chewy, slightly tangy crumb. A little whole wheat and rye add flavour and colour.',
+    flour:'Bread flour with 15% whole wheat and 5% rye.',
+    method:[
+      'Mix the flours and water and rest 1 hour. Then mix in the starter and salt.',
+      'Bulk ferment for the time you set, with 4 sets of stretch and folds, 30 minutes apart.',
+      'Pre-shape into a round, rest 20 minutes, then shape a tight boule.',
+      'Place seam up in a floured banneton, cover and refrigerate 12–16 hours.'
+    ],
+    bake:'Dutch oven preheated to 250 °C for 45 minutes. Bake 20 minutes covered, then 25–30 minutes uncovered at 230 °C, until the crust is deep brown.',
+    tips:[
+      'Bake it darker than feels safe. Much of the flavour is in the crust.',
+      'Rice flour in the banneton stops the dough sticking.',
+      'Score one curved cut about 1 cm deep. A cold loaf scores cleanly.'
+    ]
+  });
+  DATA.sourdough.styles.forEach(function(st){
+    var x = SD_EXTRA[st.id];
+    if (x) for (var k in x) st.p[k] = x[k];
+  });
+  var READY = [
+    { t:'Starter is ripe', b:['It has doubled or more in 4–8 hours and the top is domed or just starting to dip.','Bubbles run through the jar, not only on top. It smells sweet and yeasty rather than sharp.','Use it at its peak. A fallen, very sour starter makes a slower, weaker dough.'] },
+    { t:'Bulk fermentation is done', b:['The dough is up 50–75% in a straight-sided container. Mark the start level with a band.','The surface is domed with bubbles, and the dough jiggles when you shake the bowl.','Treat the clock as a guide. Warm kitchens finish earlier.'] },
+    { t:'Proofed and ready to bake', b:['Flour a finger and poke the dough 1 cm deep.','<b>Springs back slowly and partly:</b> ready.','<b>Springs back fast:</b> needs more time. <b>Stays dented:</b> overproofed, so bake right away.','A cold-retarded loaf is ready straight from the fridge.'] },
+    { t:'Baked through', b:['The crust is deep brown and the base sounds hollow when tapped.','The inside reads 96–98 °C on a probe thermometer.','Cool on a rack for at least an hour. The crumb is still setting.'] }
+  ];
+  var TROUBLE = [
+    { t:'Flat loaf that spreads', b:'Likely overproofed, a weak starter, or dough too wet for the flour. Shorten the bulk, use the starter at its peak, lower hydration by 3–5 points and shape tighter.' },
+    { t:'Dense, tight crumb', b:'Likely underproofed or a sluggish starter. Let the bulk reach a 50–75% rise, feed the starter twice before baking and keep the dough warmer.' },
+    { t:'Too sour', b:'Long cold retards, stiff or old starters and high whole-grain shares push sourness. Use a liquid starter fed at 1 : 5, retard 8–10 hours and cut the whole grain.' },
+    { t:'Not sour enough', b:'Short, warm fermentations give a mild loaf. Try a 12–16 hour retard, 15–20% whole wheat or rye, or a stiffer starter.' },
+    { t:'Gummy crumb', b:'The loaf was cut hot, underbaked, or too wet. Bake until the inside reaches 96–98 °C and cool for a full hour.' },
+    { t:'Pale or thick crust', b:'The oven was too cool or the loaf had no steam. Preheat the Dutch oven for 45–60 minutes and uncover for the final 20–25 minutes.' },
+    { t:'No ear, loaf bursts at the side', b:'Score 0.5–1 cm deep at about 30–45° and shape tighter. A cold loaf scores more cleanly.' },
+    { t:'Sticky, slack dough', b:'Hydration is high for your flour. Wet your hands, fold more often, use stronger flour or lower hydration by 3–5 points.' }
+  ];
+  var SAVE_KEYS = ['cat','styleId','leaven','starterHyd','starterType','pieces','weight','hydration','salt','fat','sugar','hours','temp','incl','inclPct','scaleBy','flourTotal','sdMode','autolyse','retardH','bakeMin','planMode','planTime','roomT','flourT','starterT','friction','feedRatio','keep'].concat(FLOUR_KEYS);
+
+  try {
+    var su = localStorage.getItem('dough-units');
+    if (su === 'metric' || su === 'imperial') state.units = su;
+  } catch (e0) {}
+
+  $('incl').innerHTML = '<option value="none">None</option>' + Object.keys(INCL).map(function(k){ return '<option value="' + k + '">' + INCL[k].name + '</option>'; }).join('');
+  $('vessel').innerHTML = VESSELS.map(function(v){ return '<option value="' + v.id + '">' + v.name + '</option>'; }).join('');
+
+  function L(t){
+    if (state.units !== 'imperial') return t;
+    return t.replace(/(\d+)(?:–(\d+))? °C/g, function(m, a, b){
+      var f = function(x){ return Math.round((x*9/5 + 32)/5)*5; };
+      return f(+a) + (b ? '–' + f(+b) : '') + ' °F';
+    });
+  }
+  function wParts(g){
+    if (state.units === 'imperial'){
+      var oz = g/G_OZ;
+      if (oz >= 16){ var lb = Math.floor(oz/16); return { n: lb + ' lb ' + (oz - 16*lb).toFixed(1), u:'oz' }; }
+      return { n: oz < 1 ? oz.toFixed(2) : oz.toFixed(1), u:'oz' };
+    }
+    return { n: fmtG(g), u:'g' };
+  }
+  function fmtW(g){ var p = wParts(g); return p.n + ' ' + p.u; }
+  function tempText(c){ return state.units === 'imperial' ? Math.round(c*9/5 + 32) + ' °F' : c + ' °C'; }
+  function fmtT(c){
+    return state.units === 'imperial' ? (Math.round((c*9/5 + 32)*10)/10) + ' °F' : (Math.round(c*10)/10) + ' °C';
+  }
+  function fromBase(kind, v){
+    if (state.units !== 'imperial') return v;
+    if (kind === 'w') return Math.round(v/G_OZ*10)/10;
+    if (kind === 't') return Math.round(v*9/5 + 32);
+    return v;
+  }
+  function toBase(kind, v){
+    if (state.units !== 'imperial') return v;
+    if (kind === 'w') return v*G_OZ;
+    if (kind === 't') return (v - 32)*5/9;
+    return v;
+  }
+  function fieldVal(el){
+    var k = el.getAttribute('data-kind'), v = state[el.id];
+    return k ? fromBase(k, v) : v;
+  }
+  function limit(el, which){
+    var a = el.getAttribute('data-' + which);
+    if (a !== null) return Number(a);
+    return Number(which === 'lo' ? el.min : el.max);
+  }
+  function pad2(n){ return (n < 10 ? '0' : '') + n; }
+  function clock(m){ var x = ((Math.round(m) % 1440) + 1440) % 1440; return pad2(Math.floor(x/60)) + ':' + pad2(x % 60); }
+  function parseTime(t){ var p = String(t || '09:00').split(':'); return (+p[0])*60 + (+p[1] || 0); }
+  function fmtH(h){ return (Math.round(h*2)/2) + ' h'; }
+
+  function feedPlan(c){
+    if (!c.starter) return null;
+    var r = Number(state.feedRatio), hy = state.starterHyd/100;
+    var keep = Math.max(0, Number(state.keep) || 0);
+    var need = c.starter.sw + keep;
+    var unit = need/(1 + r + r*hy);
+    var baseH = { 1:4, 2:6, 5:8, 10:12 }[r] || 8;
+    var ripe = clamp(Math.round(baseH*Math.pow(2, (24 - state.roomT)/10)*2)/2, 2, 24);
+    return { need:need, recipe:c.starter.sw, keep:keep, seed:unit, flour:unit*r, water:unit*r*hy, ripe:ripe };
+  }
+
+  function renderExtras(c){
+    var s = state, sd = s.cat === 'sourdough', np = s.cat !== 'pizza', imp = s.units === 'imperial';
+    Array.prototype.forEach.call(document.querySelectorAll('.usuf-w'), function(el){ el.textContent = imp ? 'oz' : 'g'; });
+    Array.prototype.forEach.call(document.querySelectorAll('.usuf-t'), function(el){ el.textContent = imp ? '°F' : '°C'; });
+    Array.prototype.forEach.call(document.querySelectorAll('#unitSwitch button'), function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-unit') === s.units));
+    });
+    $('flourTotRow').hidden = s.scaleBy !== 'flour';
+    $('weightField').hidden = s.scaleBy === 'flour';
+    $('vesselRow').hidden = !np;
+    var vs = null;
+    VESSELS.forEach(function(v){ if (v.id === s.vessel) vs = v; });
+    $('useVessel').hidden = !(vs && vs.g);
+    if (vs && vs.g) $('useVessel').textContent = 'Use ' + fmtW(vs.g) + ' for 1 piece';
+    $('inclGrp').hidden = !np;
+    $('inclAmt').hidden = s.incl === 'none';
+    $('inclHint').textContent = s.incl === 'none' ? '' : L(INCL[s.incl].hint);
+    $('starterTypeRow').hidden = s.leaven !== 'starter';
+    $('starterProfile').textContent = (STARTER_TYPES[s.starterType] || STARTER_TYPES.white).note;
+    var tools = s.page === 'tools' && sd;
+    $('sdTools').hidden = !tools;
+    $('mainGrid').hidden = tools;
+    $('notes').hidden = tools;
+    $('tabs').hidden = tools;
+    Array.prototype.forEach.call(document.querySelectorAll('#pageTabs button'), function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-page') === (tools ? 'tools' : 'recipe')));
+    });
+    $('retardField').hidden = s.sdMode !== 'retard';
+    if (tools){
+      $('sdStripText').textContent = currentStyle().name + ' \u00b7 ' + s.pieces + ' \u00d7 ' + fmtW(c.each) + ' \u00b7 ' + s.hydration + '% hydration';
+      renderSd(c);
+    }
+  }
+
+  function renderSd(c){
+    var s = state, st = currentStyle();
+    var ready = '', trouble = '';
+    READY.forEach(function(r){ ready += '<details><summary>' + r.t + '</summary><div>' + r.b.map(function(x){ return '<span>' + L(x) + '</span>'; }).join('') + '</div></details>'; });
+    TROUBLE.forEach(function(r){ trouble += '<details><summary>' + r.t + '</summary><div><span>' + L(r.b) + '</span></div></details>'; });
+    $('readyList').innerHTML = ready;
+    $('troubleList').innerHTML = trouble;
+    if (s.leaven !== 'starter'){
+      var msg = '<p class="note2">Choose Sourdough starter under Leavening to use this.</p>';
+      $('tlList').innerHTML = ''; $('tlSummary').textContent = 'Choose Sourdough starter under Leavening to see the timeline.';
+      $('feedOut').innerHTML = msg; $('waterOut').innerHTML = msg;
+      return;
+    }
+    var fp = feedPlan(c);
+
+    /* feeding */
+    var f = '<dl class="kv">' +
+      '<dt>Ripe starter for this dough</dt><dd>' + fmtW(fp.recipe) + '</dd>' +
+      '<dt>Plus keep-back</dt><dd>' + fmtW(fp.keep) + '</dd>' +
+      '<dt>Old starter (seed)</dt><dd class="big">' + fmtW(fp.seed) + '</dd>' +
+      '<dt>Flour</dt><dd class="big">' + fmtW(fp.flour) + '</dd>' +
+      '<dt>Water</dt><dd class="big">' + fmtW(fp.water) + '</dd>' +
+      '<dt>Ripe in about</dt><dd>' + fmtH(fp.ripe) + ' at ' + tempText(s.roomT) + '</dd></dl>' +
+      '<p class="note2">Makes ' + fmtW(fp.need) + ' in total. Mix, cover loosely and use it when it has doubled and domed.</p>';
+    $('feedOut').innerHTML = f;
+
+    /* water temperature */
+    var hasSt = true, k = 4;
+    var sum = Number(s.roomT) + Number(s.flourT) + Number(s.starterT) + Number(s.friction);
+    var w = k*s.temp - sum;
+    $('tempSub').textContent = 'Target dough temperature ' + tempText(s.temp) + ', set by the Dough temperature slider.';
+    var advice = '';
+    if (w < 3) advice = '<p class="note2 bad">Very cold. Use ice water, and check whether the flour or room can be cooler or the target warmer.</p>';
+    else if (w > 38) advice = '<p class="note2 bad">Too hot. Water above about 38 °C harms the starter. Lower the dough temperature or warm the flour a little.</p>';
+    else advice = '<p class="note2">Use this water when you mix the dough.</p>';
+    if (state.units === 'imperial') advice = advice.replace('38 °C', '100 °F');
+    $('waterOut').innerHTML = '<dl class="kv"><dt>Water to use</dt><dd class="big">' + fmtT(w) + '</dd></dl>' + advice;
+
+    /* timeline */
+    var A = Math.max(0, Number(s.autolyse) || 0), B = s.hours*60;
+    var folds = B >= 300 ? 4 : B >= 150 ? 3 : B >= 60 ? 2 : 0;
+    folds = Math.min(folds, Math.floor(B*0.6/30));
+    var proof = clamp(Math.round(90/Math.pow(2, (s.temp - 22)/10)/5)*5, 45, 150);
+    var retard = s.sdMode === 'retard';
+    var rest = 20, tail = retard ? s.retardH*60 : proof;
+    var D = A + B + rest + tail;
+    var plan = parseTime(s.planTime);
+    var t0 = s.planMode === 'bake' ? plan - D : plan;
+    var tAdd = t0 + A, tShape = tAdd + B, tFinal = tShape + rest, tBake = tFinal + tail;
+    var pizza = st.id === 'sdpizza', tin = st.id === 'sdsandwich';
+    var steps = [];
+    steps.push({ t:tAdd - fp.ripe*60, a:'Feed the starter', b:fmtW(fp.seed) + ' old starter + ' + fmtW(fp.flour) + ' flour + ' + fmtW(fp.water) + ' water. Ripe in about ' + fmtH(fp.ripe) + '.' + (function(){ var m = (((Math.round(tAdd - fp.ripe*60) % 1440) + 1440) % 1440); return m < 330 ? ' This falls overnight. A 1 : 10 feed before bed ripens by morning.' : ''; })() });
+    if (A > 0) steps.push({ t:t0, a:'Autolyse', b:'Mix ' + fmtW(c.addFlour) + ' flour with ' + fmtW(c.addWater) + ' water until no dry flour remains. Rest ' + A + ' min.' });
+    steps.push({ t:tAdd, a:A > 0 ? 'Add starter and salt' : 'Mix the dough', b: (A > 0 ? '' : fmtW(c.addFlour) + ' flour, ' + fmtW(c.addWater) + ' water, ') + fmtW(c.starter.sw) + ' starter and ' + fmtW(c.salt) + ' salt. Water at ' + fmtT(w) + '.', key:true });
+    for (var i = 1; i <= folds; i++){
+      var extra = (i === folds && s.incl !== 'none') ? ' Add the ' + INCL[s.incl].short.toLowerCase() + ' now.' : '';
+      steps.push({ t:tAdd + i*30, a:'Stretch and fold ' + i + ' of ' + folds, b:'Four folds around the bowl.' + extra });
+    }
+    steps.push({ t:tShape, a:'Bulk is done', b: pizza ? 'Dough is up 50–75% and domed. Divide into balls and cover.' : 'Dough is up 50–75% and domed. Pre-shape and rest ' + rest + ' min.' });
+    if (!pizza) steps.push({ t:tFinal - 0.001, a:'Final shape', b: tin ? 'Shape and place in the tin, seam down.' : 'Shape tightly and place seam up in a floured banneton.' });
+    if (retard) steps.push({ t:tFinal, a:'Into the fridge', b:'Cover and chill for ' + s.retardH + ' h.', key:true });
+    else steps.push({ t:tFinal, a:'Final proof', b:proof + ' min at room temperature. Use the poke test.', key:true });
+    steps.push({ t:tBake - 45, a:'Preheat the oven', b: pizza ? 'Heat the steel or stone for 45 minutes.' : 'Heat the oven and Dutch oven for 45 minutes.' });
+    steps.push({ t:tBake, a:'Bake', b: s.bakeMin + ' min. ' + L(st.bake), key:true });
+    steps.push({ t:tBake + s.bakeMin, a:'Out of the oven', b:'Cool on a rack for 1 hour before cutting.' });
+    steps.forEach(function(x, ix){ x.i = ix; });
+    steps.sort(function(x, y){ return x.t - y.t || x.i - y.i; });
+    var first = steps[0].t, dayStart = Math.floor(first/1440)*1440;
+    $('tlList').innerHTML = steps.map(function(x){
+      return '<li' + (x.key ? ' class="key"' : '') + '><span class="when">' + clock(x.t) + '<small>Day ' + (Math.floor((x.t - dayStart)/1440) + 1) + '</small></span>' +
+        '<span class="what"><b>' + x.a + '</b><span>' + x.b + '</span></span></li>';
+    }).join('');
+    var dBake = Math.floor((tBake - dayStart)/1440) + 1;
+    $('tlSummary').textContent = 'First step Day 1 at ' + clock(first) + '. Bake Day ' + dBake + ' at ' + clock(tBake) + '. Ready to cut at ' + clock(tBake + s.bakeMin + 60) + '.';
+  }
+
+  /* saved recipes */
+  var storeOK = true;
+  function readSaved(){
+    try {
+      var r = JSON.parse(localStorage.getItem('dough-recipes') || '[]');
+      return Array.isArray(r) ? r : [];
+    } catch (e) { storeOK = false; return []; }
+  }
+  function writeSaved(a){
+    try { localStorage.setItem('dough-recipes', JSON.stringify(a)); return true; }
+    catch (e) { storeOK = false; return false; }
+  }
+  function esc(t){ return String(t).replace(/[&<>"]/g, function(ch){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[ch]; }); }
+  function renderSaved(){
+    var a = readSaved();
+    $('savedList').innerHTML = a.map(function(r, i){
+      var sty = '';
+      if (r.s && DATA[r.s.cat]) DATA[r.s.cat].styles.forEach(function(x){ if (x.id === r.s.styleId) sty = x.name; });
+      return '<li><div><b>' + esc(r.name) + '</b><span>' + esc(sty) + '</span></div>' +
+        '<button type="button" class="btn sm ghost" data-load="' + i + '">Load</button>' +
+        '<button type="button" class="btn sm ghost" data-del="' + i + '">Delete</button></li>';
+    }).join('');
+    $('savedNote').textContent = !storeOK ? 'Saving is not available in this view, so recipes will not be kept.' :
+      (a.length ? 'Saved in this browser only.' : 'Save a formula to find it here next time. Recipes stay in this browser only.');
+  }
+  $('saveRec').addEventListener('click', function(){
+    var snap = {};
+    SAVE_KEYS.forEach(function(k){ snap[k] = state[k]; });
+    var name = $('recName').value.trim() || currentStyle().name;
+    var a = readSaved();
+    a.unshift({ name:name.slice(0, 40), ts:Date.now(), s:snap });
+    writeSaved(a.slice(0, 30));
+    $('recName').value = '';
+    renderSaved();
+  });
+  $('savedList').addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if (!b) return;
+    var a = readSaved();
+    if (b.hasAttribute('data-del')){
+      a.splice(Number(b.getAttribute('data-del')), 1);
+      writeSaved(a); renderSaved();
+    } else if (b.hasAttribute('data-load')){
+      var r = a[Number(b.getAttribute('data-load'))];
+      if (!r || !r.s || !DATA[r.s.cat]) return;
+      var ok = DATA[r.s.cat].styles.some(function(x){ return x.id === r.s.styleId; });
+      if (!ok) return;
+      SAVE_KEYS.forEach(function(k){ if (r.s[k] !== undefined) state[k] = r.s[k]; });
+      if (state.cat !== 'sourdough') state.page = 'recipe';
+      renderAll();
+    }
+  });
+
+  /* extra controls */
+  ['scaleBy','incl','starterType','vessel','sdMode','planMode','friction','feedRatio'].forEach(function(id){
+    $(id).addEventListener('change', function(){
+      var v = $(id).value;
+      if (id === 'friction' || id === 'feedRatio') v = Number(v);
+      state[id] = v;
+      if (id === 'incl') state.inclPct = v === 'none' ? 0 : INCL[v].pct;
+      if (id === 'starterType') state.starterHyd = STARTER_TYPES[v].hyd;
+      syncControls();
+      updateResults();
+    });
+  });
+  $('planTime').addEventListener('input', function(){
+    if ($('planTime').value) { state.planTime = $('planTime').value; updateResults(); }
+  });
+  $('useVessel').addEventListener('click', function(){
+    VESSELS.forEach(function(v){
+      if (v.id === state.vessel && v.g){ state.weight = v.g; state.pieces = 1; state.scaleBy = 'dough'; }
+    });
+    syncControls();
+    updateResults();
+  });
+  $('unitSwitch').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-unit]');
+    if (!b) return;
+    state.units = b.getAttribute('data-unit');
+    try { localStorage.setItem('dough-units', state.units); } catch (e2) {}
+    renderAll();
+  });
+
+  var ACC_DESC = {
+    'Bake-day timeline':'Clock times from feeding the starter to cutting the loaf',
+    'Feed your starter':'Seed, flour and water for the feed or levain build',
+    'Water temperature':'Water to hit your target dough temperature',
+    'Is it ready?':'Checks for the starter, bulk, proof and bake',
+    'Troubleshooting':'Common problems, causes and fixes'
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('#sdTools .card'), function(card, i){
+    var h3 = card.querySelector('h3');
+    var title = h3.textContent;
+    var body = document.createElement('div');
+    body.className = 'acc-b';
+    body.id = 'acc-' + i;
+    while (h3.nextSibling) body.appendChild(h3.nextSibling);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'acc-h';
+    btn.setAttribute('aria-controls', body.id);
+    btn.innerHTML = '<span><b>' + title + '</b><small>' + (ACC_DESC[title] || '') + '</small></span><span class="chev" aria-hidden="true"></span>';
+    var open = i === 0;
+    btn.setAttribute('aria-expanded', String(open));
+    body.hidden = !open;
+    card.replaceChild(btn, h3);
+    card.appendChild(body);
+    btn.addEventListener('click', function(){
+      var now = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(now));
+      body.hidden = !now;
+    });
+  });
+
+  $('pageTabs').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-page]');
+    if (!b) return;
+    state.page = b.getAttribute('data-page');
+    if (state.page === 'tools'){
+      if (state.cat !== 'sourdough'){
+        state.cat = 'sourdough';
+        state.styleId = styleList()[0].id;
+        applyPreset();
+      }
+      state.leaven = 'starter';
+    }
+    renderAll();
+  });
+  $('editFormula').addEventListener('click', function(){ state.page = 'recipe'; renderAll(); });
+  $('bulkH').addEventListener('input', function(){
+    var v = parseFloat($('bulkH').value);
+    if (!isFinite(v)) return;
+    state.hours = clamp(v, 1, 72);
+    $('hours').value = state.hours;
+    updateResults();
+  });
+  $('doughT').addEventListener('input', function(){
+    var v = parseFloat($('doughT').value);
+    if (!isFinite(v)) return;
+    state.temp = clamp(Math.round(toBase('t', v)), 2, 32);
+    $('temp').value = state.temp;
+    updateResults();
+  });
+  ['bulkH','doughT'].forEach(function(id){
+    $(id).addEventListener('blur', function(){ syncControls(); });
+  });
+
+  applyPreset();
+  renderAll();
+})();
+</script>
+
+</body></html>
